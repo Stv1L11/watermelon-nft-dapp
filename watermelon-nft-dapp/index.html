@@ -230,21 +230,25 @@
     <h2>5. 賣瓜市場 / 上架列表</h2>
 
     <button onclick="loadMarketListings()">重新整理市場</button>
-    <p>顯示目前已上架出售的 Watermelon NFT。只有指定買家可以購買。</p>
+    <p>顯示目前已上架出售的 Watermelon NFT。自由市場任何人可買，指定交易只有指定買家可買。</p>
 
     <div id="marketStatus">尚未載入市場</div>
     <div id="market" class="inventory-grid"></div>
   </div>
 
   <div class="card">
-    <h2>6. 一對一指定買家交易</h2>
+    <h2>6. 交易功能</h2>
 
     <h3>賣家：上架 NFT 給指定買家</h3>
     <input id="listTokenIdInput" type="number" placeholder="輸入要出售的 Token ID" />
     <input id="assignedBuyerInput" type="text" placeholder="輸入指定買家地址 0x..." />
     <button class="trade-btn" onclick="listForSale()">上架給指定買家</button>
 
-    <h3>買家：購買指定 NFT</h3>
+    <h3>賣家：上架到自由市場</h3>
+    <input id="publicListTokenIdInput" type="number" placeholder="輸入要上架到自由市場的 Token ID" />
+    <button class="trade-btn" onclick="listForPublicSale()">上架到自由市場</button>
+
+    <h3>買家：購買 NFT</h3>
     <input id="buyTokenIdInput" type="number" placeholder="輸入要購買的 Token ID" />
     <button class="trade-btn" onclick="buyNFT()">購買 NFT</button>
 
@@ -255,10 +259,6 @@
     <h3>查詢交易資訊</h3>
     <input id="tradeInfoTokenIdInput" type="number" placeholder="輸入 Token ID" />
     <button onclick="getTradeInfo()">查詢交易狀態</button>
-
-    <p class="small-text">
-      注意：價格由西瓜品質自動決定。賣家上架時要指定買家地址，只有該地址可以購買。
-    </p>
   </div>
 
   <div class="card">
@@ -279,7 +279,7 @@
   <script type="module">
     import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.16.0/+esm";
 
-    const CONTRACT_ADDRESS = "0x5C9d98A67244a964d04FFBe9d436139A1D185322";
+    const CONTRACT_ADDRESS = "0xdcee585C342282CEf9E0df439AD819CDeb396b15";
 
     const ABI = [
       "function mintByType(uint8 typeId) external returns (uint256)",
@@ -299,6 +299,7 @@
 
       "function getTokenPrice(uint256 tokenId) external view returns (uint256)",
       "function listTokenForSale(uint256 tokenId, address buyer) external",
+      "function listTokenForPublicSale(uint256 tokenId) external",
       "function cancelTokenSale(uint256 tokenId) external",
       "function buyListedToken(uint256 tokenId) external payable",
       "function getTradeInfo(uint256 tokenId) external view returns (address seller, address buyer, bool active, uint256 price)"
@@ -308,6 +309,8 @@
     let signer;
     let contract;
     let currentAddress;
+
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
     function ipfsToHttp(ipfsUrl) {
       if (!ipfsUrl) return "";
@@ -548,7 +551,6 @@
               backpackDiv.appendChild(nftCard);
             }
           } catch {
-            // token 不存在或查詢失敗就略過
           }
         }
 
@@ -592,6 +594,12 @@
               continue;
             }
 
+            const realOwner = await contract.ownerOf(tokenId);
+
+            if (realOwner.toLowerCase() !== seller.toLowerCase()) {
+              continue;
+            }
+
             listingCount++;
 
             const info = await contract.getFullTokenInfo(tokenId);
@@ -616,8 +624,10 @@
               imageUrl = "";
             }
 
-            const isAssignedBuyer =
-              buyer.toLowerCase() === currentAddress.toLowerCase();
+            const isPublicMarket = buyer.toLowerCase() === ZERO_ADDRESS;
+            const isAssignedBuyer = buyer.toLowerCase() === currentAddress.toLowerCase();
+            const isSeller = seller.toLowerCase() === currentAddress.toLowerCase();
+            const canBuy = !isSeller && (isPublicMarket || isAssignedBuyer);
 
             const card = document.createElement("div");
             card.className = "nft-card";
@@ -636,21 +646,23 @@
               <p><strong>Power:</strong> ${power}</p>
               <p><strong>Defense:</strong> ${defense}</p>
               <p><strong>Price:</strong> ${ethers.formatEther(price)} ETH</p>
+              <p><strong>Market Type:</strong> ${isPublicMarket ? "自由市場" : "指定買家交易"}</p>
 
               <p class="small-text"><strong>Seller:</strong> ${seller}</p>
-              <p class="small-text"><strong>Assigned Buyer:</strong> ${buyer}</p>
+              <p class="small-text"><strong>Buyer:</strong> ${isPublicMarket ? "任何人都可以購買" : buyer}</p>
 
               ${
-                isAssignedBuyer
+                canBuy
                   ? `<button class="trade-btn" onclick="buyMarketNFT(${tokenId})">購買這顆西瓜</button>`
-                  : `<p class="warning">你不是指定買家，不能購買</p>`
+                  : isSeller
+                    ? `<p class="warning">這是你自己上架的西瓜</p>`
+                    : `<p class="warning">你不是指定買家，不能購買</p>`
               }
             `;
 
             marketDiv.appendChild(card);
 
           } catch {
-            // 查詢失敗就略過
           }
         }
 
@@ -695,7 +707,7 @@
         const tx = await contract.listTokenForSale(tokenId, buyer);
 
         document.getElementById("result").innerText =
-          "上架交易送出中...\n" +
+          "指定買家上架交易送出中...\n" +
           "Token ID: " + tokenId + "\n" +
           "指定買家: " + buyer + "\n" +
           "固定價格: " + ethers.formatEther(price) + " ETH\n" +
@@ -704,7 +716,7 @@
         await tx.wait();
 
         document.getElementById("result").innerText =
-          "上架成功！\n" +
+          "指定買家上架成功！\n" +
           "Token ID: " + tokenId + "\n" +
           "指定買家: " + buyer + "\n" +
           "固定價格: " + ethers.formatEther(price) + " ETH\n" +
@@ -714,7 +726,51 @@
 
       } catch (error) {
         document.getElementById("result").innerText =
-          "上架失敗：\n" + error.message;
+          "指定買家上架失敗：\n" + error.message;
+      }
+    };
+
+    window.listForPublicSale = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("publicListTokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const owner = await contract.ownerOf(tokenId);
+
+        if (owner.toLowerCase() !== currentAddress.toLowerCase()) {
+          alert("你不是這個 NFT 的擁有者，不能上架");
+          return;
+        }
+
+        const price = await contract.getTokenPrice(tokenId);
+
+        const tx = await contract.listTokenForPublicSale(tokenId);
+
+        document.getElementById("result").innerText =
+          "自由市場上架交易送出中...\n" +
+          "Token ID: " + tokenId + "\n" +
+          "固定價格: " + ethers.formatEther(price) + " ETH\n" +
+          "Tx Hash: " + tx.hash;
+
+        await tx.wait();
+
+        document.getElementById("result").innerText =
+          "自由市場上架成功！\n" +
+          "Token ID: " + tokenId + "\n" +
+          "固定價格: " + ethers.formatEther(price) + " ETH\n" +
+          "Tx Hash: " + tx.hash;
+
+        await loadMarketListings();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "自由市場上架失敗：\n" + error.message;
       }
     };
 
@@ -759,7 +815,14 @@
         return;
       }
 
-      if (buyer.toLowerCase() !== currentAddress.toLowerCase()) {
+      const isPublicMarket = buyer.toLowerCase() === ZERO_ADDRESS;
+
+      if (seller.toLowerCase() === currentAddress.toLowerCase()) {
+        alert("你不能購買自己上架的 NFT");
+        return;
+      }
+
+      if (!isPublicMarket && buyer.toLowerCase() !== currentAddress.toLowerCase()) {
         alert("你不是這個 NFT 指定的買家");
         return;
       }
@@ -835,11 +898,12 @@
         }
 
         const info = await contract.getTradeInfo(tokenId);
+        const isPublicMarket = info[1].toLowerCase() === ZERO_ADDRESS;
 
         document.getElementById("result").innerText =
           "Token ID: " + tokenId + "\n" +
           "Seller: " + info[0] + "\n" +
-          "Buyer: " + info[1] + "\n" +
+          "Buyer: " + (isPublicMarket ? "自由市場，任何人都可以購買" : info[1]) + "\n" +
           "Active: " + info[2] + "\n" +
           "Price: " + ethers.formatEther(info[3]) + " ETH";
 
