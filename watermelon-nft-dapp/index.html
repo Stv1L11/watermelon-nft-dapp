@@ -7,7 +7,7 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 1100px;
+      max-width: 1150px;
       margin: 40px auto;
       background: #f5fff5;
       color: #222;
@@ -48,9 +48,25 @@
       background: #a86d00;
     }
 
+    .trade-btn {
+      background: #2563eb;
+    }
+
+    .trade-btn:hover {
+      background: #1d4ed8;
+    }
+
+    .cancel-btn {
+      background: #b00020;
+    }
+
+    .cancel-btn:hover {
+      background: #8a0018;
+    }
+
     input {
       padding: 10px;
-      width: 240px;
+      width: 300px;
       margin: 6px;
     }
 
@@ -99,6 +115,28 @@
       color: #b00020;
       font-weight: bold;
     }
+
+    .success {
+      color: #168a3a;
+      font-weight: bold;
+    }
+
+    .price-table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .price-table th,
+    .price-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .price-table th {
+      background: #e8f8e8;
+    }
   </style>
 </head>
 
@@ -124,6 +162,7 @@
     <hr>
 
     <button class="random-btn" onclick="mintRandomNFT()">🎲 隨機抽瓜</button>
+    <button class="random-btn" onclick="mintRandomTenNFT()">🎲 十連抽瓜</button>
 
     <p>
       隨機機率：
@@ -145,7 +184,85 @@
   </div>
 
   <div class="card">
-    <h2>4. 查詢 NFT 資料</h2>
+    <h2>4. 固定價格表</h2>
+
+    <table class="price-table">
+      <tr>
+        <th>typeId</th>
+        <th>西瓜</th>
+        <th>品質</th>
+        <th>固定價格</th>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td>Normal Watermelon</td>
+        <td>Common</td>
+        <td>0.001 ETH</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Yellow Watermelon</td>
+        <td>Rare</td>
+        <td>0.003 ETH</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Square Watermelon</td>
+        <td>Epic</td>
+        <td>0.005 ETH</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Frozen Watermelon</td>
+        <td>Epic+</td>
+        <td>0.008 ETH</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Golden Watermelon</td>
+        <td>Legendary</td>
+        <td>0.01 ETH</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>5. 賣瓜市場 / 上架列表</h2>
+
+    <button onclick="loadMarketListings()">重新整理市場</button>
+    <p>顯示目前已上架出售的 Watermelon NFT。只有指定買家可以購買。</p>
+
+    <div id="marketStatus">尚未載入市場</div>
+    <div id="market" class="inventory-grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>6. 一對一指定買家交易</h2>
+
+    <h3>賣家：上架 NFT 給指定買家</h3>
+    <input id="listTokenIdInput" type="number" placeholder="輸入要出售的 Token ID" />
+    <input id="assignedBuyerInput" type="text" placeholder="輸入指定買家地址 0x..." />
+    <button class="trade-btn" onclick="listForSale()">上架給指定買家</button>
+
+    <h3>買家：購買指定 NFT</h3>
+    <input id="buyTokenIdInput" type="number" placeholder="輸入要購買的 Token ID" />
+    <button class="trade-btn" onclick="buyNFT()">購買 NFT</button>
+
+    <h3>賣家：取消上架</h3>
+    <input id="cancelTokenIdInput" type="number" placeholder="輸入要取消的 Token ID" />
+    <button class="cancel-btn" onclick="cancelSale()">取消上架</button>
+
+    <h3>查詢交易資訊</h3>
+    <input id="tradeInfoTokenIdInput" type="number" placeholder="輸入 Token ID" />
+    <button onclick="getTradeInfo()">查詢交易狀態</button>
+
+    <p class="small-text">
+      注意：價格由西瓜品質自動決定。賣家上架時要指定買家地址，只有該地址可以購買。
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>7. 查詢 NFT 資料</h2>
 
     <input id="tokenIdInput" type="number" placeholder="輸入 Token ID，例如 1" />
 
@@ -153,6 +270,7 @@
     <button onclick="getOwner()">查詢擁有者</button>
     <button onclick="getTokenURI()">查詢 Token URI</button>
     <button onclick="getFullTokenInfo()">查詢完整資訊</button>
+    <button onclick="getTokenPrice()">查詢價格</button>
 
     <h3>查詢結果</h3>
     <pre id="result">尚無資料</pre>
@@ -161,22 +279,29 @@
   <script type="module">
     import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.16.0/+esm";
 
-    // 請換成你重新部署後的新合約地址
-    const CONTRACT_ADDRESS = "0x263c3BaeF8843eB691816f57Ee8F3c31dAbe6C1f";
+    const CONTRACT_ADDRESS = "0x5C9d98A67244a964d04FFBe9d436139A1D185322";
 
     const ABI = [
       "function mintByType(uint8 typeId) external returns (uint256)",
       "function mintRandom() external returns (uint256)",
+      "function mintRandomTen() external returns (uint256[] memory)",
 
       "function getWatermelon(uint256 _tokenId) external view returns (string memory name, string memory rarity, uint256 power, uint256 defense, string memory uri)",
       "function getFullTokenInfo(uint256 _tokenId) external view returns (address owner, uint8 itemType, string memory name, string memory rarity, uint256 power, uint256 defense, string memory actualTokenURI, uint256 mintedAt)",
       "function getTokenURIById(uint256 _tokenId) external view returns (string memory)",
+      "function getLastBatchMintedTokenIds(address owner) external view returns (uint256[] memory)",
 
       "function ownerOf(uint256 tokenId) external view returns (address)",
       "function tokenURI(uint256 tokenId) external view returns (string memory)",
       "function nextTokenId() external view returns (uint256)",
       "function tokenData(uint256 tokenId) external view returns (uint8 itemType, uint256 mintedAt)",
-      "function lastMintedTokenId(address owner) external view returns (uint256)"
+      "function lastMintedTokenId(address owner) external view returns (uint256)",
+
+      "function getTokenPrice(uint256 tokenId) external view returns (uint256)",
+      "function listTokenForSale(uint256 tokenId, address buyer) external",
+      "function cancelTokenSale(uint256 tokenId) external",
+      "function buyListedToken(uint256 tokenId) external payable",
+      "function getTradeInfo(uint256 tokenId) external view returns (address seller, address buyer, bool active, uint256 price)"
     ];
 
     let provider;
@@ -228,6 +353,7 @@
         }
 
         await loadBackpack();
+        await loadMarketListings();
 
       } catch (error) {
         document.getElementById("result").innerText =
@@ -301,6 +427,48 @@
       }
     };
 
+    window.mintRandomTenNFT = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tx = await contract.mintRandomTen();
+
+        document.getElementById("result").innerText =
+          "十連抽交易送出中...\nTx Hash: " + tx.hash;
+
+        await tx.wait();
+
+        const tokenIds = await contract.getLastBatchMintedTokenIds(currentAddress);
+
+        let resultText = "十連抽成功！\n\n";
+
+        for (let i = 0; i < tokenIds.length; i++) {
+          const tokenId = tokenIds[i];
+          const info = await contract.getFullTokenInfo(tokenId);
+
+          resultText +=
+            "第 " + (i + 1) + " 抽\n" +
+            "Token ID: " + tokenId.toString() + "\n" +
+            "Type ID: " + info[1].toString() + "\n" +
+            "Name: " + info[2] + "\n" +
+            "Rarity: " + info[3] + "\n" +
+            "Power: " + info[4].toString() + "\n" +
+            "Defense: " + info[5].toString() + "\n" +
+            "Token URI: " + info[6] + "\n\n";
+        }
+
+        resultText += "Tx Hash: " + tx.hash;
+
+        document.getElementById("result").innerText = resultText;
+
+        await loadBackpack();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "十連抽失敗：\n" + error.message;
+      }
+    };
+
     window.loadBackpack = async function () {
       try {
         if (!contract || !currentAddress) {
@@ -336,6 +504,14 @@
               const defense = info[5].toString();
               const tokenUri = info[6];
 
+              let priceText = "";
+              try {
+                const price = await contract.getTokenPrice(tokenId);
+                priceText = ethers.formatEther(price) + " ETH";
+              } catch {
+                priceText = "無法取得";
+              }
+
               let imageUrl = "";
               let metadataName = name;
 
@@ -345,7 +521,7 @@
 
                 metadataName = metadata.name || name;
                 imageUrl = ipfsToHttp(metadata.image);
-              } catch (metadataError) {
+              } catch {
                 imageUrl = "";
               }
 
@@ -365,12 +541,13 @@
                 <p><strong>Rarity:</strong> ${rarity}</p>
                 <p><strong>Power:</strong> ${power}</p>
                 <p><strong>Defense:</strong> ${defense}</p>
+                <p><strong>Price:</strong> ${priceText}</p>
                 <p class="small-text"><strong>Token URI:</strong> ${tokenUri}</p>
               `;
 
               backpackDiv.appendChild(nftCard);
             }
-          } catch (error) {
+          } catch {
             // token 不存在或查詢失敗就略過
           }
         }
@@ -384,6 +561,291 @@
       } catch (error) {
         document.getElementById("backpackStatus").innerText =
           "背包載入失敗：\n" + error.message;
+      }
+    };
+
+    window.loadMarketListings = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const marketDiv = document.getElementById("market");
+        const statusDiv = document.getElementById("marketStatus");
+
+        marketDiv.innerHTML = "";
+        statusDiv.innerText = "市場載入中...";
+
+        const nextId = await contract.nextTokenId();
+        const maxTokenId = Number(nextId) - 1;
+
+        let listingCount = 0;
+
+        for (let tokenId = 1; tokenId <= maxTokenId; tokenId++) {
+          try {
+            const tradeInfo = await contract.getTradeInfo(tokenId);
+
+            const seller = tradeInfo[0];
+            const buyer = tradeInfo[1];
+            const active = tradeInfo[2];
+            const price = tradeInfo[3];
+
+            if (!active) {
+              continue;
+            }
+
+            listingCount++;
+
+            const info = await contract.getFullTokenInfo(tokenId);
+
+            const itemType = info[1].toString();
+            const name = info[2];
+            const rarity = info[3];
+            const power = info[4].toString();
+            const defense = info[5].toString();
+            const tokenUri = info[6];
+
+            let imageUrl = "";
+            let metadataName = name;
+
+            try {
+              const metadataResponse = await fetch(ipfsToHttp(tokenUri));
+              const metadata = await metadataResponse.json();
+
+              metadataName = metadata.name || name;
+              imageUrl = ipfsToHttp(metadata.image);
+            } catch {
+              imageUrl = "";
+            }
+
+            const isAssignedBuyer =
+              buyer.toLowerCase() === currentAddress.toLowerCase();
+
+            const card = document.createElement("div");
+            card.className = "nft-card";
+
+            card.innerHTML = `
+              ${
+                imageUrl
+                  ? `<img src="${imageUrl}" alt="${metadataName}">`
+                  : `<p class="warning">圖片載入失敗</p>`
+              }
+
+              <h3>${metadataName}</h3>
+              <p><strong>Token ID:</strong> ${tokenId}</p>
+              <p><strong>Type ID:</strong> ${itemType}</p>
+              <p><strong>Rarity:</strong> ${rarity}</p>
+              <p><strong>Power:</strong> ${power}</p>
+              <p><strong>Defense:</strong> ${defense}</p>
+              <p><strong>Price:</strong> ${ethers.formatEther(price)} ETH</p>
+
+              <p class="small-text"><strong>Seller:</strong> ${seller}</p>
+              <p class="small-text"><strong>Assigned Buyer:</strong> ${buyer}</p>
+
+              ${
+                isAssignedBuyer
+                  ? `<button class="trade-btn" onclick="buyMarketNFT(${tokenId})">購買這顆西瓜</button>`
+                  : `<p class="warning">你不是指定買家，不能購買</p>`
+              }
+            `;
+
+            marketDiv.appendChild(card);
+
+          } catch {
+            // 查詢失敗就略過
+          }
+        }
+
+        if (listingCount === 0) {
+          statusDiv.innerText = "目前沒有任何西瓜 NFT 正在出售。";
+        } else {
+          statusDiv.innerText = "目前共有 " + listingCount + " 個西瓜 NFT 正在出售。";
+        }
+
+      } catch (error) {
+        document.getElementById("marketStatus").innerText =
+          "市場載入失敗：\n" + error.message;
+      }
+    };
+
+    window.listForSale = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("listTokenIdInput").value;
+        const buyer = document.getElementById("assignedBuyerInput").value.trim();
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        if (!ethers.isAddress(buyer)) {
+          alert("指定買家地址格式錯誤");
+          return;
+        }
+
+        const owner = await contract.ownerOf(tokenId);
+
+        if (owner.toLowerCase() !== currentAddress.toLowerCase()) {
+          alert("你不是這個 NFT 的擁有者，不能上架");
+          return;
+        }
+
+        const price = await contract.getTokenPrice(tokenId);
+
+        const tx = await contract.listTokenForSale(tokenId, buyer);
+
+        document.getElementById("result").innerText =
+          "上架交易送出中...\n" +
+          "Token ID: " + tokenId + "\n" +
+          "指定買家: " + buyer + "\n" +
+          "固定價格: " + ethers.formatEther(price) + " ETH\n" +
+          "Tx Hash: " + tx.hash;
+
+        await tx.wait();
+
+        document.getElementById("result").innerText =
+          "上架成功！\n" +
+          "Token ID: " + tokenId + "\n" +
+          "指定買家: " + buyer + "\n" +
+          "固定價格: " + ethers.formatEther(price) + " ETH\n" +
+          "Tx Hash: " + tx.hash;
+
+        await loadMarketListings();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "上架失敗：\n" + error.message;
+      }
+    };
+
+    window.buyNFT = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("buyTokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        await buyTokenById(tokenId);
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "購買失敗：\n" + error.message;
+      }
+    };
+
+    window.buyMarketNFT = async function (tokenId) {
+      try {
+        if (!(await checkConnected())) return;
+        await buyTokenById(tokenId);
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "市場購買失敗：\n" + error.message;
+      }
+    };
+
+    async function buyTokenById(tokenId) {
+      const tradeInfo = await contract.getTradeInfo(tokenId);
+      const seller = tradeInfo[0];
+      const buyer = tradeInfo[1];
+      const active = tradeInfo[2];
+      const price = tradeInfo[3];
+
+      if (!active) {
+        alert("這個 NFT 尚未上架");
+        return;
+      }
+
+      if (buyer.toLowerCase() !== currentAddress.toLowerCase()) {
+        alert("你不是這個 NFT 指定的買家");
+        return;
+      }
+
+      const tx = await contract.buyListedToken(tokenId, {
+        value: price
+      });
+
+      document.getElementById("result").innerText =
+        "購買交易送出中...\n" +
+        "Token ID: " + tokenId + "\n" +
+        "Seller: " + seller + "\n" +
+        "Buyer: " + currentAddress + "\n" +
+        "Price: " + ethers.formatEther(price) + " ETH\n" +
+        "Tx Hash: " + tx.hash;
+
+      await tx.wait();
+
+      document.getElementById("result").innerText =
+        "購買成功！\n" +
+        "Token ID: " + tokenId + "\n" +
+        "Seller: " + seller + "\n" +
+        "Buyer: " + currentAddress + "\n" +
+        "Price: " + ethers.formatEther(price) + " ETH\n" +
+        "Tx Hash: " + tx.hash;
+
+      await loadBackpack();
+      await loadMarketListings();
+    }
+
+    window.cancelSale = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("cancelTokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const tx = await contract.cancelTokenSale(tokenId);
+
+        document.getElementById("result").innerText =
+          "取消上架交易送出中...\n" +
+          "Token ID: " + tokenId + "\n" +
+          "Tx Hash: " + tx.hash;
+
+        await tx.wait();
+
+        document.getElementById("result").innerText =
+          "取消上架成功！\n" +
+          "Token ID: " + tokenId + "\n" +
+          "Tx Hash: " + tx.hash;
+
+        await loadMarketListings();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "取消上架失敗：\n" + error.message;
+      }
+    };
+
+    window.getTradeInfo = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("tradeInfoTokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const info = await contract.getTradeInfo(tokenId);
+
+        document.getElementById("result").innerText =
+          "Token ID: " + tokenId + "\n" +
+          "Seller: " + info[0] + "\n" +
+          "Buyer: " + info[1] + "\n" +
+          "Active: " + info[2] + "\n" +
+          "Price: " + ethers.formatEther(info[3]) + " ETH";
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "查詢交易資訊失敗：\n" + error.message;
       }
     };
 
@@ -485,6 +947,29 @@
       } catch (error) {
         document.getElementById("result").innerText =
           "查詢完整資訊失敗：\n" + error.message;
+      }
+    };
+
+    window.getTokenPrice = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("tokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const price = await contract.getTokenPrice(tokenId);
+
+        document.getElementById("result").innerText =
+          "Token ID: " + tokenId + "\n" +
+          "Price: " + ethers.formatEther(price) + " ETH";
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "查詢價格失敗：\n" + error.message;
       }
     };
 
