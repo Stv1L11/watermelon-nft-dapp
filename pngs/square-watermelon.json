@@ -1,0 +1,23 @@
+{
+  "name": "Square Watermelon",
+  "description": "An epic square watermelon NFT game item.",
+  "image": "ipfs://bafybeie2ryihfmyx64he5ix5gtx2phdm4lz3u3yxjkls5h7zlteqomg27u",
+  "attributes": [
+    {
+      "trait_type": "Type ID",
+      "value": 3
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Epic"
+    },
+    {
+      "trait_type": "Power",
+      "value": 45
+    },
+    {
+      "trait_type": "Defense",
+      "value": 25
+    }
+  ]
+}

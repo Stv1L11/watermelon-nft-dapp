@@ -1,0 +1,23 @@
+{
+  "name": "Frozen Watermelon",
+  "description": "An epic frozen watermelon NFT game item.",
+  "image": "ipfs://bafybeig4ttwnydnlcg2st2hoofa6ft7iyplcyfog7lt5noqsisjqylnf3u",
+  "attributes": [
+    {
+      "trait_type": "Type ID",
+      "value": 4
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Epic"
+    },
+    {
+      "trait_type": "Power",
+      "value": 60
+    },
+    {
+      "trait_type": "Defense",
+      "value": 40
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Normal Watermelon",
+  "description": "A common watermelon item in the blockchain game.",
+  "image": "ipfs://bafybeicqsg4b2if4g6ojoggpu7rsfdxs2j52ln5c6xkxkgpw4lqz236ztu",
+  "attributes": [
+    {
+      "trait_type": "Rarity",
+      "value": "Common"
+    },
+    {
+      "trait_type": "Power",
+      "value": 10
+    },
+    {
+      "trait_type": "Defense",
+      "value": 5
+    }
+  ]
+}

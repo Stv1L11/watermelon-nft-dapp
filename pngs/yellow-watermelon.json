@@ -1,0 +1,23 @@
+{
+  "name": "Yellow Watermelon",
+  "description": "A rare yellow watermelon NFT game item.",
+  "image": "ipfs://bafybeidudwpnqf5ivsz4tyovdwtghzfw7egxxeatifxjntdsrvmztxijpe",
+  "attributes": [
+    {
+      "trait_type": "Type ID",
+      "value": 2
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Rare"
+    },
+    {
+      "trait_type": "Power",
+      "value": 25
+    },
+    {
+      "trait_type": "Defense",
+      "value": 15
+    }
+  ]
+}

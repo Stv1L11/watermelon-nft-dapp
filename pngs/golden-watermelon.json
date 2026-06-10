@@ -1,0 +1,19 @@
+{
+  "name": "Golden Watermelon",
+  "description": "A legendary watermelon item in the blockchain game.",
+  "image": "ipfs://bafybeiadzcluxysbn4nmtnoc3hneii6gxl2tmeiwwlmaip7psy32i7luo4",
+  "attributes": [
+    {
+      "trait_type": "Rarity",
+      "value": "Legendary"
+    },
+    {
+      "trait_type": "Power",
+      "value": 90
+    },
+    {
+      "trait_type": "Defense",
+      "value": 50
+    }
+  ]
+}

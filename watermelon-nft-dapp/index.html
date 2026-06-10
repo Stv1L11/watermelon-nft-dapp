@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>Watermelon NFT DApp</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1100px;
+      margin: 40px auto;
+      background: #f5fff5;
+      color: #222;
+    }
+
+    h1 {
+      color: #168a3a;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    button {
+      padding: 10px 16px;
+      margin: 6px;
+      border: none;
+      border-radius: 8px;
+      background: #19a34a;
+      color: white;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    button:hover {
+      background: #117a35;
+    }
+
+    .random-btn {
+      background: #d18b00;
+    }
+
+    .random-btn:hover {
+      background: #a86d00;
+    }
+
+    input {
+      padding: 10px;
+      width: 240px;
+      margin: 6px;
+    }
+
+    pre {
+      background: #eee;
+      padding: 12px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .nft-card {
+      background: #ffffff;
+      border: 1px solid #d8efd8;
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .nft-card img {
+      width: 100%;
+      border-radius: 10px;
+      background: #f0f0f0;
+      margin-bottom: 10px;
+    }
+
+    .nft-card h3 {
+      margin: 6px 0;
+      color: #168a3a;
+    }
+
+    .small-text {
+      font-size: 13px;
+      word-break: break-all;
+      color: #555;
+    }
+
+    .warning {
+      color: #b00020;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🍉 Watermelon NFT Game Item System</h1>
+
+  <div class="card">
+    <h2>1. 連接錢包</h2>
+    <button onclick="connectWallet()">Connect MetaMask</button>
+    <p>錢包地址：<span id="walletAddress">尚未連接</span></p>
+    <p>目前網路：<span id="networkName">未知</span></p>
+  </div>
+
+  <div class="card">
+    <h2>2. Mint 西瓜 NFT</h2>
+
+    <button onclick="mintNFT(1)">Mint Normal Watermelon</button>
+    <button onclick="mintNFT(2)">Mint Yellow Watermelon</button>
+    <button onclick="mintNFT(3)">Mint Square Watermelon</button>
+    <button onclick="mintNFT(4)">Mint Frozen Watermelon</button>
+    <button onclick="mintNFT(5)">Mint Golden Watermelon</button>
+
+    <hr>
+
+    <button class="random-btn" onclick="mintRandomNFT()">🎲 隨機抽瓜</button>
+
+    <p>
+      隨機機率：
+      Normal 50%、
+      Yellow 25%、
+      Square 15%、
+      Frozen 8%、
+      Golden 2%
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>3. 我的背包</h2>
+    <button onclick="loadBackpack()">重新整理背包</button>
+    <p>顯示目前錢包擁有的 Watermelon NFT。</p>
+
+    <div id="backpackStatus">尚未載入背包</div>
+    <div id="backpack" class="inventory-grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. 查詢 NFT 資料</h2>
+
+    <input id="tokenIdInput" type="number" placeholder="輸入 Token ID，例如 1" />
+
+    <button onclick="getWatermelon()">查詢西瓜資料</button>
+    <button onclick="getOwner()">查詢擁有者</button>
+    <button onclick="getTokenURI()">查詢 Token URI</button>
+    <button onclick="getFullTokenInfo()">查詢完整資訊</button>
+
+    <h3>查詢結果</h3>
+    <pre id="result">尚無資料</pre>
+  </div>
+
+  <script type="module">
+    import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.16.0/+esm";
+
+    // 請換成你重新部署後的新合約地址
+    const CONTRACT_ADDRESS = "0x263c3BaeF8843eB691816f57Ee8F3c31dAbe6C1f";
+
+    const ABI = [
+      "function mintByType(uint8 typeId) external returns (uint256)",
+      "function mintRandom() external returns (uint256)",
+
+      "function getWatermelon(uint256 _tokenId) external view returns (string memory name, string memory rarity, uint256 power, uint256 defense, string memory uri)",
+      "function getFullTokenInfo(uint256 _tokenId) external view returns (address owner, uint8 itemType, string memory name, string memory rarity, uint256 power, uint256 defense, string memory actualTokenURI, uint256 mintedAt)",
+      "function getTokenURIById(uint256 _tokenId) external view returns (string memory)",
+
+      "function ownerOf(uint256 tokenId) external view returns (address)",
+      "function tokenURI(uint256 tokenId) external view returns (string memory)",
+      "function nextTokenId() external view returns (uint256)",
+      "function tokenData(uint256 tokenId) external view returns (uint8 itemType, uint256 mintedAt)",
+      "function lastMintedTokenId(address owner) external view returns (uint256)"
+    ];
+
+    let provider;
+    let signer;
+    let contract;
+    let currentAddress;
+
+    function ipfsToHttp(ipfsUrl) {
+      if (!ipfsUrl) return "";
+
+      if (ipfsUrl.startsWith("ipfs://")) {
+        return ipfsUrl.replace("ipfs://", "https://gateway.pinata.cloud/ipfs/");
+      }
+
+      return ipfsUrl;
+    }
+
+    async function checkConnected() {
+      if (!contract || !currentAddress) {
+        alert("請先連接 MetaMask");
+        return false;
+      }
+      return true;
+    }
+
+    window.connectWallet = async function () {
+      try {
+        if (!window.ethereum) {
+          alert("請先安裝 MetaMask");
+          return;
+        }
+
+        provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
+
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+        currentAddress = await signer.getAddress();
+        const network = await provider.getNetwork();
+
+        document.getElementById("walletAddress").innerText = currentAddress;
+
+        if (network.chainId === 11155111n) {
+          document.getElementById("networkName").innerText = "Sepolia";
+        } else {
+          document.getElementById("networkName").innerHTML =
+            "<span class='warning'>不是 Sepolia，請切換網路</span>";
+        }
+
+        await loadBackpack();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "連接錢包失敗：\n" + error.message;
+      }
+    };
+
+    window.mintNFT = async function (typeId) {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tx = await contract.mintByType(typeId);
+
+        document.getElementById("result").innerText =
+          "Mint 交易送出中...\nTx Hash: " + tx.hash;
+
+        await tx.wait();
+
+        const mintedTokenId = await contract.lastMintedTokenId(currentAddress);
+        const info = await contract.getFullTokenInfo(mintedTokenId);
+
+        document.getElementById("result").innerText =
+          "Mint 成功！\n" +
+          "Token ID: " + mintedTokenId.toString() + "\n" +
+          "Type ID: " + info[1].toString() + "\n" +
+          "Name: " + info[2] + "\n" +
+          "Rarity: " + info[3] + "\n" +
+          "Power: " + info[4].toString() + "\n" +
+          "Defense: " + info[5].toString() + "\n" +
+          "Token URI: " + info[6] + "\n" +
+          "Tx Hash: " + tx.hash;
+
+        await loadBackpack();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "Mint 失敗：\n" + error.message;
+      }
+    };
+
+    window.mintRandomNFT = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tx = await contract.mintRandom();
+
+        document.getElementById("result").innerText =
+          "隨機抽瓜交易送出中...\nTx Hash: " + tx.hash;
+
+        await tx.wait();
+
+        const mintedTokenId = await contract.lastMintedTokenId(currentAddress);
+        const info = await contract.getFullTokenInfo(mintedTokenId);
+
+        document.getElementById("result").innerText =
+          "隨機抽瓜成功！\n" +
+          "Token ID: " + mintedTokenId.toString() + "\n" +
+          "Type ID: " + info[1].toString() + "\n" +
+          "Name: " + info[2] + "\n" +
+          "Rarity: " + info[3] + "\n" +
+          "Power: " + info[4].toString() + "\n" +
+          "Defense: " + info[5].toString() + "\n" +
+          "Token URI: " + info[6] + "\n" +
+          "Tx Hash: " + tx.hash;
+
+        await loadBackpack();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "隨機抽瓜失敗：\n" + error.message;
+      }
+    };
+
+    window.loadBackpack = async function () {
+      try {
+        if (!contract || !currentAddress) {
+          document.getElementById("backpackStatus").innerText =
+            "請先連接 MetaMask。";
+          return;
+        }
+
+        const backpackDiv = document.getElementById("backpack");
+        const statusDiv = document.getElementById("backpackStatus");
+
+        backpackDiv.innerHTML = "";
+        statusDiv.innerText = "背包載入中...";
+
+        const nextId = await contract.nextTokenId();
+        const maxTokenId = Number(nextId) - 1;
+
+        let ownedCount = 0;
+
+        for (let tokenId = 1; tokenId <= maxTokenId; tokenId++) {
+          try {
+            const owner = await contract.ownerOf(tokenId);
+
+            if (owner.toLowerCase() === currentAddress.toLowerCase()) {
+              ownedCount++;
+
+              const info = await contract.getFullTokenInfo(tokenId);
+
+              const itemType = info[1].toString();
+              const name = info[2];
+              const rarity = info[3];
+              const power = info[4].toString();
+              const defense = info[5].toString();
+              const tokenUri = info[6];
+
+              let imageUrl = "";
+              let metadataName = name;
+
+              try {
+                const metadataResponse = await fetch(ipfsToHttp(tokenUri));
+                const metadata = await metadataResponse.json();
+
+                metadataName = metadata.name || name;
+                imageUrl = ipfsToHttp(metadata.image);
+              } catch (metadataError) {
+                imageUrl = "";
+              }
+
+              const nftCard = document.createElement("div");
+              nftCard.className = "nft-card";
+
+              nftCard.innerHTML = `
+                ${
+                  imageUrl
+                    ? `<img src="${imageUrl}" alt="${metadataName}">`
+                    : `<p class="warning">圖片載入失敗</p>`
+                }
+
+                <h3>${metadataName}</h3>
+                <p><strong>Token ID:</strong> ${tokenId}</p>
+                <p><strong>Type ID:</strong> ${itemType}</p>
+                <p><strong>Rarity:</strong> ${rarity}</p>
+                <p><strong>Power:</strong> ${power}</p>
+                <p><strong>Defense:</strong> ${defense}</p>
+                <p class="small-text"><strong>Token URI:</strong> ${tokenUri}</p>
+              `;
+
+              backpackDiv.appendChild(nftCard);
+            }
+          } catch (error) {
+            // token 不存在或查詢失敗就略過
+          }
+        }
+
+        if (ownedCount === 0) {
+          statusDiv.innerText = "你的錢包目前沒有 Watermelon NFT。";
+        } else {
+          statusDiv.innerText = "你的背包共有 " + ownedCount + " 個 Watermelon NFT。";
+        }
+
+      } catch (error) {
+        document.getElementById("backpackStatus").innerText =
+          "背包載入失敗：\n" + error.message;
+      }
+    };
+
+    window.getWatermelon = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("tokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const data = await contract.getWatermelon(tokenId);
+
+        document.getElementById("result").innerText =
+          "Token ID: " + tokenId + "\n" +
+          "Name: " + data[0] + "\n" +
+          "Rarity: " + data[1] + "\n" +
+          "Power: " + data[2].toString() + "\n" +
+          "Defense: " + data[3].toString() + "\n" +
+          "Item URI: " + data[4];
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "查詢失敗：\n" + error.message;
+      }
+    };
+
+    window.getOwner = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("tokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const owner = await contract.ownerOf(tokenId);
+
+        document.getElementById("result").innerText =
+          "Token ID: " + tokenId + "\nOwner: " + owner;
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "查詢失敗：\n" + error.message;
+      }
+    };
+
+    window.getTokenURI = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("tokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const uri = await contract.getTokenURIById(tokenId);
+
+        document.getElementById("result").innerText =
+          "Token ID: " + tokenId + "\nToken URI: " + uri;
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "查詢失敗：\n" + error.message;
+      }
+    };
+
+    window.getFullTokenInfo = async function () {
+      try {
+        if (!(await checkConnected())) return;
+
+        const tokenId = document.getElementById("tokenIdInput").value;
+
+        if (!tokenId) {
+          alert("請輸入 Token ID");
+          return;
+        }
+
+        const info = await contract.getFullTokenInfo(tokenId);
+
+        document.getElementById("result").innerText =
+          "Token ID: " + tokenId + "\n" +
+          "Owner: " + info[0] + "\n" +
+          "Type ID: " + info[1].toString() + "\n" +
+          "Name: " + info[2] + "\n" +
+          "Rarity: " + info[3] + "\n" +
+          "Power: " + info[4].toString() + "\n" +
+          "Defense: " + info[5].toString() + "\n" +
+          "Actual Token URI: " + info[6] + "\n" +
+          "Minted At: " + info[7].toString();
+
+      } catch (error) {
+        document.getElementById("result").innerText =
+          "查詢完整資訊失敗：\n" + error.message;
+      }
+    };
+
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", function () {
+        location.reload();
+      });
+
+      window.ethereum.on("chainChanged", function () {
+        location.reload();
+      });
+    }
+  </script>
+</body>
+</html>
