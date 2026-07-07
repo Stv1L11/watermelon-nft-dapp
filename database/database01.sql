@@ -16,6 +16,7 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+--
 -- Table structure for table `audit_logs`
 --
 
@@ -24,26 +25,34 @@ DROP TABLE IF EXISTS `audit_logs`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `audit_logs` (
   `command_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '交易ID，區塊鏈存證索引',
-  `user_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `user_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作者 user_id；訪客 token 操作時可為 NULL',
+  `guest_token_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'UC4.2 訪客令牌識別碼；對應 guest_tokens.token_id',
+  `actor_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作者類型: USER, GUEST, SYSTEM',
   `u_id` int DEFAULT NULL,
   `device_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `family_id` int DEFAULT NULL COMMENT 'UC4/UC5 場域隔離查詢用 family_id',
   `action` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '操作行為',
   `parameters` json DEFAULT NULL COMMENT '操作詳細參數(IP、持續時間等)',
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Denied' COMMENT '操作結果: Verified 或 Denied',
+  `raw_data` json DEFAULT NULL COMMENT 'UC4 控制請求、MQTT payload 或設備回報原始資料',
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Denied' COMMENT '操作結果: Verified, Denied, Success, Failed',
+  `decision` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '零信任決策: ALLOW 或 DENY',
+  `reason` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '拒絕或失敗原因，例如 TOKEN_EXPIRED、POLICY_DENIED',
   `timestamp` int NOT NULL COMMENT '操作發生之 Unix 時間戳記',
   `prev_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '前一筆日誌的 current_hash',
   `current_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '由數據計算所得 SHA-256',
   PRIMARY KEY (`command_id`),
   KEY `user_id` (`user_id`),
+  KEY `idx_audit_guest_token` (`guest_token_id`),
   KEY `device_id` (`device_id`),
   KEY `idx_audit_time` (`timestamp`),
+  KEY `idx_audit_family_time` (`family_id`,`timestamp`),
+  KEY `idx_audit_device_time` (`device_id`,`timestamp`),
   KEY `fk_audit_users_id` (`u_id`),
   CONSTRAINT `audit_logs_ibfk_2` FOREIGN KEY (`device_id`) REFERENCES `devices` (`device_id`),
   CONSTRAINT `fk_audit_users_id` FOREIGN KEY (`u_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
 -- Dumping data for table `audit_logs`
 --
 
@@ -53,6 +62,7 @@ LOCK TABLES `audit_logs` WRITE;
 UNLOCK TABLES;
 
 --
+--
 -- Table structure for table `device_telemetry`
 --
 
@@ -61,18 +71,24 @@ DROP TABLE IF EXISTS `device_telemetry`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `device_telemetry` (
   `log_id` bigint NOT NULL AUTO_INCREMENT,
+  `family_id` int DEFAULT NULL COMMENT 'UC4/UC4.3 場域儀表板查詢用 family_id',
   `device_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '歷史狀態快照(Online, Fault, LowBattery)',
-  `telemetry_data` json DEFAULT NULL COMMENT '感測器物理數據',
+  `command_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '對應 control_commands.command_id',
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '歷史狀態快照(Online, Fault, LowBattery, SUCCEEDED)',
+  `physical_state` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '設備物理狀態，例如 LOCKED, UNLOCKED, ON, OFF',
+  `telemetry_data` json DEFAULT NULL COMMENT '設備原始回報資料與感測器物理數據',
+  `battery` int DEFAULT NULL COMMENT '電量百分比；模擬或 ESP32 回報',
+  `rssi` int DEFAULT NULL COMMENT 'Wi-Fi RSSI；模擬或 ESP32 回報',
   `recorded_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`log_id`),
   KEY `device_id` (`device_id`),
   KEY `idx_telemetry_time` (`recorded_at`),
+  KEY `idx_telemetry_family_device` (`family_id`,`device_id`),
+  KEY `idx_telemetry_command` (`command_id`),
   CONSTRAINT `device_telemetry_ibfk_1` FOREIGN KEY (`device_id`) REFERENCES `devices` (`device_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
 -- Dumping data for table `device_telemetry`
 --
 
@@ -122,6 +138,92 @@ CREATE TABLE `devices` (
 LOCK TABLES `devices` WRITE;
 /*!40000 ALTER TABLE `devices` DISABLE KEYS */;
 /*!40000 ALTER TABLE `devices` ENABLE KEYS */;
+UNLOCK TABLES;
+
+
+--
+-- Table structure for table `guest_tokens`
+--
+
+DROP TABLE IF EXISTS `guest_tokens`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `guest_tokens` (
+  `token_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '訪客令牌識別碼，不等於明文 token',
+  `token_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '訪客 token 的 SHA-256 hash；不儲存明文 token',
+  `family_id` int NOT NULL COMMENT '令牌可使用的家庭/場域',
+  `device_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '令牌可控制的指定設備',
+  `allowed_actions` json NOT NULL COMMENT '允許執行的動作清單，例如 ["UNLOCK"]',
+  `expires_at` datetime NOT NULL COMMENT '絕對過期時間',
+  `max_uses` int NOT NULL DEFAULT '1' COMMENT '最大可使用次數',
+  `used_count` int NOT NULL DEFAULT '0' COMMENT '已使用次數',
+  `revoked` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否已撤銷，對應 UC3.5',
+  `created_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '核發者 user_id',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_used_at` datetime DEFAULT NULL COMMENT '最後一次使用時間',
+  PRIMARY KEY (`token_id`),
+  UNIQUE KEY `uk_guest_tokens_hash` (`token_hash`),
+  KEY `idx_guest_tokens_scope` (`family_id`,`device_id`),
+  KEY `idx_guest_tokens_expires` (`expires_at`),
+  KEY `idx_guest_tokens_created_by` (`created_by`),
+  KEY `fk_guest_tokens_device` (`device_id`),
+  CONSTRAINT `fk_guest_tokens_device` FOREIGN KEY (`device_id`) REFERENCES `devices` (`device_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_guest_tokens_family` FOREIGN KEY (`family_id`) REFERENCES `families` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_guest_tokens_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `guest_tokens`
+--
+
+LOCK TABLES `guest_tokens` WRITE;
+/*!40000 ALTER TABLE `guest_tokens` DISABLE KEYS */;
+/*!40000 ALTER TABLE `guest_tokens` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `control_commands`
+--
+
+DROP TABLE IF EXISTS `control_commands`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `control_commands` (
+  `command_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '控制命令 ID，同時作為稽核索引',
+  `family_id` int NOT NULL COMMENT '命令所屬家庭/場域',
+  `device_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '目標設備 ID',
+  `actor_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '操作者；USER 為 user_id，GUEST 為 token_id 或 guest',
+  `actor_type` enum('USER','GUEST') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '控制來源類型',
+  `action` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '控制動作，例如 LOCK, UNLOCK, ON, OFF',
+  `parameters` json DEFAULT NULL COMMENT '控制參數',
+  `control_mode` enum('mock','mqtt') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'mock' COMMENT 'mock 為模擬控制，mqtt 為真實 ESP32 控制接口',
+  `target_topic` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'MQTT 下發 topic',
+  `request_payload` json DEFAULT NULL COMMENT 'Gateway 下發給設備的 payload',
+  `response_payload` json DEFAULT NULL COMMENT '設備 ACK 或狀態回報 payload',
+  `status` enum('RECEIVED','DENIED','ACCEPTED','PUBLISHED','SUCCEEDED','FAILED','TIMEOUT') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'RECEIVED' COMMENT '控制命令生命週期狀態',
+  `reason` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '拒絕、失敗或逾時原因',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `published_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`command_id`),
+  KEY `idx_control_family_device` (`family_id`,`device_id`),
+  KEY `idx_control_actor` (`actor_id`,`actor_type`),
+  KEY `idx_control_status` (`status`),
+  KEY `idx_control_created_at` (`created_at`),
+  KEY `fk_control_device` (`device_id`),
+  CONSTRAINT `fk_control_device` FOREIGN KEY (`device_id`) REFERENCES `devices` (`device_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_control_family` FOREIGN KEY (`family_id`) REFERENCES `families` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `control_commands`
+--
+
+LOCK TABLES `control_commands` WRITE;
+/*!40000 ALTER TABLE `control_commands` DISABLE KEYS */;
+/*!40000 ALTER TABLE `control_commands` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -198,9 +300,6 @@ CREATE TABLE `user_families` (
   `user_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `family_id` int NOT NULL,
   `role` enum('Admin','Member','Guest','Technician','SP','Revoked') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Member' COMMENT '特定家庭場域內的身分組',
-  `start_time` datetime DEFAULT NULL COMMENT '臨時權限開始時間',
-  `end_time` datetime DEFAULT NULL COMMENT '臨時權限結束時間',
-  `max_uses` int DEFAULT NULL COMMENT '最大允許操作次數，NULL代表無限次次數限制',
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_user_family` (`user_id`,`family_id`),
   KEY `family_id` (`family_id`),
@@ -215,7 +314,7 @@ CREATE TABLE `user_families` (
 
 LOCK TABLES `user_families` WRITE;
 /*!40000 ALTER TABLE `user_families` DISABLE KEYS */;
-INSERT INTO `user_families` VALUES (1,'admin_001',12,'Admin',NULL,NULL,NULL),(9,'target_user_99',12,'Guest','2026-06-04 00:00:00','2026-06-05 23:59:59',3),(10,'target_user_88',12,'Revoked',NULL,NULL,NULL);
+INSERT INTO `user_families` VALUES (1,'admin_001',12,'Admin'),(9,'target_user_99',12,'Guest'),(10,'target_user_88',12,'Revoked');
 /*!40000 ALTER TABLE `user_families` ENABLE KEYS */;
 UNLOCK TABLES;
 
