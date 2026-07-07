@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 8.0.46, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.45, for Linux (x86_64)
 --
 -- Host: localhost    Database: database02
 -- ------------------------------------------------------
--- Server version	8.0.46-0ubuntu0.24.04.2
+-- Server version	8.0.45-0ubuntu0.24.04.1
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -183,13 +183,12 @@ CREATE TABLE `user_families` (
   `role` enum('Admin','Member','Guest','Technician','SP','Revoked') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Member' COMMENT '特定家庭場域內的身分組',
   `start_time` datetime DEFAULT NULL COMMENT '臨時權限開始時間',
   `end_time` datetime DEFAULT NULL COMMENT '臨時權限結束時間',
-  `max_uses` int DEFAULT NULL COMMENT '最大允許操作次數，NULL代表無限次次數限制',
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_user_family` (`user_id`,`family_id`),
   KEY `family_id` (`family_id`),
   CONSTRAINT `user_families_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `user_families_ibfk_2` FOREIGN KEY (`family_id`) REFERENCES `families` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -198,7 +197,7 @@ CREATE TABLE `user_families` (
 
 LOCK TABLES `user_families` WRITE;
 /*!40000 ALTER TABLE `user_families` DISABLE KEYS */;
-INSERT INTO `user_families` VALUES (1,'admin_001',12,'Admin',NULL,NULL,NULL),(9,'target_user_99',12,'Guest','2026-06-04 00:00:00','2026-06-05 23:59:59',3),(10,'target_user_88',12,'Revoked',NULL,NULL,NULL);
+INSERT INTO `user_families` VALUES (1,'admin_001',12,'Admin',NULL,NULL),(9,'target_user_99',12,'Guest',NULL,NULL),(10,'target_user_88',12,'Revoked',NULL,NULL);
 /*!40000 ALTER TABLE `user_families` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -242,4 +241,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-04  4:28:08
+-- Dump completed on 2026-06-02  4:58:38
