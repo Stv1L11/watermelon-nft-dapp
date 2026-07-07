@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 8.0.45, for Linux (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.46, for Linux (x86_64)
 --
 -- Host: localhost    Database: database02
 -- ------------------------------------------------------
--- Server version	8.0.45-0ubuntu0.24.04.1
+-- Server version	8.0.46-0ubuntu0.24.04.2
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -89,12 +89,29 @@ DROP TABLE IF EXISTS `devices`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `devices` (
-  `device_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '主鍵。設備MAC位址',
+  `device_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '主鍵。設備MAC位址或裝置唯一ID',
+  `device_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'UC2.1 裝置顯示名稱',
   `device_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '設備種類',
+  `family_id` int DEFAULT NULL COMMENT 'UC2.1 所屬家庭/場域 ID',
+  `gateway_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'UC2.1 綁定 Gateway ID',
+  `owner_user_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'UC2.1 裝置擁有者 user_id',
+  `device_public_key` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'UC2.1 終端裝置 ECDH public key PEM',
+  `gateway_public_key` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'UC2.1 Gateway ECDH public key PEM',
+  `session_key_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'UC2.1 ECDH/HKDF 派生金鑰 SHA-256 hash，不儲存明文 session key',
+  `pairing_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'unpaired' COMMENT 'UC2.1 配對狀態: unpaired, paired, failed',
+  `paired_at` timestamp NULL DEFAULT NULL COMMENT 'UC2.1 配對完成時間',
   `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Active' COMMENT '目前營運狀態: Active, Revoked, Maintenance',
+  `revoked_at` timestamp NULL DEFAULT NULL COMMENT 'UC2.3 除役時間',
+  `revoked_by` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '執行除役的操作者帳號；僅作紀錄，不做身分驗證',
+  `revocation_reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '除役原因',
   `last_action` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最後一次執行的人為動作',
   `last_update` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '心跳包更新時間',
-  PRIMARY KEY (`device_id`)
+  PRIMARY KEY (`device_id`),
+  KEY `idx_devices_status` (`status`),
+  KEY `idx_devices_family_id` (`family_id`),
+  KEY `idx_devices_gateway_id` (`gateway_id`),
+  KEY `idx_devices_owner_user_id` (`owner_user_id`),
+  KEY `idx_devices_pairing_status` (`pairing_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -183,12 +200,13 @@ CREATE TABLE `user_families` (
   `role` enum('Admin','Member','Guest','Technician','SP','Revoked') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Member' COMMENT '特定家庭場域內的身分組',
   `start_time` datetime DEFAULT NULL COMMENT '臨時權限開始時間',
   `end_time` datetime DEFAULT NULL COMMENT '臨時權限結束時間',
+  `max_uses` int DEFAULT NULL COMMENT '最大允許操作次數，NULL代表無限次次數限制',
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_user_family` (`user_id`,`family_id`),
   KEY `family_id` (`family_id`),
   CONSTRAINT `user_families_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `user_families_ibfk_2` FOREIGN KEY (`family_id`) REFERENCES `families` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -197,7 +215,7 @@ CREATE TABLE `user_families` (
 
 LOCK TABLES `user_families` WRITE;
 /*!40000 ALTER TABLE `user_families` DISABLE KEYS */;
-INSERT INTO `user_families` VALUES (1,'admin_001',12,'Admin',NULL,NULL),(9,'target_user_99',12,'Guest',NULL,NULL),(10,'target_user_88',12,'Revoked',NULL,NULL);
+INSERT INTO `user_families` VALUES (1,'admin_001',12,'Admin',NULL,NULL,NULL),(9,'target_user_99',12,'Guest','2026-06-04 00:00:00','2026-06-05 23:59:59',3),(10,'target_user_88',12,'Revoked',NULL,NULL,NULL);
 /*!40000 ALTER TABLE `user_families` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -241,4 +259,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-02  4:58:38
+-- Dump completed on 2026-06-04  4:28:08
